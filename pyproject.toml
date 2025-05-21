@@ -1,7 +1,7 @@
 [project]
 name = "snu-econ-analysis"
 version = "0.1.0"
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 dependencies = [
     "ipykernel>=6.29.5",
     "matplotlib>=3.10.3",
@@ -9,6 +9,7 @@ dependencies = [
     "numpy>=1.26.4",
     "pandas>=2.2.3",
     "plotly>=6.1.1",
+    "pmdarima>=2.0.4",
     "prophet>=1.1.6",
     "scikit-learn>=1.6.1",
     "seaborn>=0.13.2",
