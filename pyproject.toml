@@ -3,10 +3,12 @@ name = "snu-econ-analysis"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
+    "arch>=7.2.0",
     "ipykernel>=6.29.5",
     "matplotlib>=3.10.3",
     "neuralprophet>=0.9.0",
     "numpy>=1.26.4",
+    "oecddatabuilder>=0.1.2",
     "pandas>=2.2.3",
     "plotly>=6.1.1",
     "pmdarima>=2.0.4",
