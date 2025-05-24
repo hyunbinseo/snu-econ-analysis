@@ -1,0 +1,51 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    devDependencies:
+      '@std/csv':
+        specifier: jsr:^1.0.6
+        version: '@jsr/std__csv@1.0.6'
+      '@types/node':
+        specifier: ^22.15.21
+        version: 22.15.21
+
+packages:
+
+  '@jsr/std__bytes@1.0.6':
+    resolution: {integrity: sha512-St6yKggjFGhxS52IFLJWvkchRFbAKg2Xh8UxA4S1EGz7GJ2Ui+ssDDldj/w2c8vCxvl6qgR0HaYbKeFJNqujmA==, tarball: https://npm.jsr.io/~/11/@jsr/std__bytes/1.0.6.tgz}
+
+  '@jsr/std__csv@1.0.6':
+    resolution: {integrity: sha512-9n/SZzjolPQ907gUPksQU3EFURwRl4GA9V6MylA8hpSkpxhcj6J98zDpn9EmDqgE2A4L9MnlUvFhRpeWl+Y/ZQ==, tarball: https://npm.jsr.io/~/11/@jsr/std__csv/1.0.6.tgz}
+
+  '@jsr/std__streams@1.0.9':
+    resolution: {integrity: sha512-nPkEijnOPwLQt6ZtvOajE6F2hCmRILaq0kR6I0JFVvxSsvhdeyFMGc8F4DqypCpfq/U+8umLcE0RNMcYdx4NlQ==, tarball: https://npm.jsr.io/~/11/@jsr/std__streams/1.0.9.tgz}
+
+  '@types/node@22.15.21':
+    resolution: {integrity: sha512-EV/37Td6c+MgKAbkcLG6vqZ2zEYHD7bvSrzqqs2RIhbA6w3x+Dqz8MZM3sP6kGTeLrdoOgKZe+Xja7tUB2DNkQ==}
+
+  undici-types@6.21.0:
+    resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
+
+snapshots:
+
+  '@jsr/std__bytes@1.0.6': {}
+
+  '@jsr/std__csv@1.0.6':
+    dependencies:
+      '@jsr/std__streams': 1.0.9
+
+  '@jsr/std__streams@1.0.9':
+    dependencies:
+      '@jsr/std__bytes': 1.0.6
+
+  '@types/node@22.15.21':
+    dependencies:
+      undici-types: 6.21.0
+
+  undici-types@6.21.0: {}
