@@ -1,4 +1,4 @@
-# %% 1-1 Setup
+# %% 1. 데이터 수집 및 전처리
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -65,7 +65,7 @@ train_size = int(len(df_prophet) * 0.85)
 df_train = df_prophet[:train_size]
 df_test = df_prophet[train_size:]
 
-# %% 1-2 Prophet
+# %% 2. Prophet 기본 모델
 p_model = Prophet(interval_width=0.8)
 p_model.add_country_holidays(country_name="KR")
 p_model.fit(df_train)
@@ -76,6 +76,8 @@ p_forecast_test = p_forecast[train_size:].copy()
 
 p_series_actual = df_test["y"].reset_index(drop=True)
 p_series_pred = p_forecast_test["yhat"].reset_index(drop=True)
+
+print(p_forecast_test.head())
 
 p_mae = mean_absolute_error(p_series_actual, p_series_pred)
 p_rmse = np.sqrt(mean_squared_error(p_series_actual, p_series_pred))
@@ -124,7 +126,7 @@ plt.show()
 p_model.plot_components(p_forecast)
 plt.show()
 
-# %% 1-3 Prophet Changepoints
+# %% 3. Change Point 민감도 분석
 p_cp_scales = [0.01, 0.1, 0.5]
 p_cp_results = []
 p_cp_models = {}
@@ -276,7 +278,7 @@ for i, scale in enumerate(p_cp_scales):
 plt.tight_layout()
 plt.show()
 
-# %% 1-4 NeuralProphet
+# %% 4. NeuralProphet 활용
 np_model = NeuralProphet(
     yearly_seasonality=True,
     weekly_seasonality=True,
@@ -300,6 +302,14 @@ np_forecast_test = np_forecast[train_size:].copy().dropna()
 np_series_actual = df_test["y"].reset_index(drop=True)
 np_series_pred = np_forecast_test["yhat1"].reset_index(drop=True)
 
+print(np_forecast_test.head())
+# 'yhat1', 'yhat2', 'yhat3', 'yhat4', 'yhat5', … 'yhat384'
+# 'yhat1 10.0%', 'yhat2 10.0%', 'yhat3 10.0%', … 'yhat384 10.0%'
+# 'yhat1 90.0%', 'yhat2 90.0%', 'yhat3 90.0%', … 'yhat384 90.0%'
+
+# e.g. yhat3 is the prediction for this datetime, predicted 3 steps ago, it is “3 steps old”.
+# Reference https://neuralprophet.com/how-to-guides/feature-guides/collect_predictions.html
+
 np_mae = mean_absolute_error(np_series_actual, np_series_pred)
 np_rmse = np.sqrt(mean_squared_error(np_series_actual, np_series_pred))
 np_mape = np.mean(np.abs((np_series_actual - np_series_pred) / np_series_actual)) * 100
@@ -310,8 +320,8 @@ np_crps = np.mean(
             y_true=float(np_series_actual.iloc[i]),
             pred_quantiles=np.array(
                 [
-                    np_forecast_test["yhat1 0.1"].iloc[i],
-                    np_forecast_test["yhat1 0.9"].iloc[i],
+                    np_forecast_test["yhat1 10.0%"].iloc[i],
+                    np_forecast_test["yhat1 90.0%"].iloc[i],
                 ]
             ),
             quantile_levels=np.array([0.1, 0.9]),
@@ -327,4 +337,5 @@ print(f"MAPE: {p_mape:.2f}%")
 print(f"sMAPE: {p_smape:.2f}%")
 print(f"CRPS: {np_crps:.4f}")
 
+np_model.highlight_nth_step_ahead_of_each_forecast(step_number=1)
 np_model.plot(np_forecast)
