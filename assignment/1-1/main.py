@@ -1,12 +1,20 @@
-# %%
+# %% 1-1 Setup
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from neuralprophet import NeuralProphet
 from prophet import Prophet
+from skforecast.metrics import crps_from_quantiles
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
-# %% 1-1 Setup
+
+def smape(y_true, y_pred):
+    numerator = np.abs(y_pred - y_true)
+    denominator = (np.abs(y_true) + np.abs(y_pred)) / 2
+    ratio = np.where(denominator == 0, 0, numerator / denominator)
+    return np.mean(ratio) * 100
+
+
 date_column = "date"
 value_column = "rental"
 
@@ -58,12 +66,13 @@ df_train = df_prophet[:train_size]
 df_test = df_prophet[train_size:]
 
 # %% 1-2 Prophet
-p_model = Prophet()
+p_model = Prophet(interval_width=0.8)
 p_model.add_country_holidays(country_name="KR")
 p_model.fit(df_train)
 
-p_forecast = p_model.predict(p_model.make_future_dataframe(periods=len(df_test)))
-p_forecast_test = p_forecast[train_size:]
+p_dataframe = p_model.make_future_dataframe(periods=len(df_test))
+p_forecast = p_model.predict(p_dataframe)
+p_forecast_test = p_forecast[train_size:].copy()
 
 p_series_actual = df_test["y"].reset_index(drop=True)
 p_series_pred = p_forecast_test["yhat"].reset_index(drop=True)
@@ -71,11 +80,29 @@ p_series_pred = p_forecast_test["yhat"].reset_index(drop=True)
 p_mae = mean_absolute_error(p_series_actual, p_series_pred)
 p_rmse = np.sqrt(mean_squared_error(p_series_actual, p_series_pred))
 p_mape = np.mean(np.abs((p_series_actual - p_series_pred) / p_series_actual)) * 100
+p_smape = smape(p_series_actual, p_series_pred)
+p_crps = np.mean(
+    [
+        crps_from_quantiles(
+            y_true=float(p_series_actual.iloc[i]),
+            pred_quantiles=np.array(
+                [
+                    p_forecast_test["yhat_lower"].iloc[i],
+                    p_forecast_test["yhat_upper"].iloc[i],
+                ]
+            ),
+            quantile_levels=np.array([0.1, 0.9]),
+        )
+        for i in range(len(p_series_actual))
+    ]
+)
 
-print("\nOut-of-time Test Results (Log Scale):")
+print("\nProphet Results (Log Scale):")
 print(f"MAE: {p_mae:.4f}")
 print(f"RMSE: {p_rmse:.4f}")
 print(f"MAPE: {p_mape:.2f}%")
+print(f"sMAPE: {p_smape:.2f}%")
+print(f"CRPS: {p_crps:.4f}")
 
 plt.figure(figsize=(15, 8))
 plt.plot(df_train["ds"], df_train["y"], label="Train Data", color="blue")
@@ -256,16 +283,48 @@ np_model = NeuralProphet(
     daily_seasonality=False,
     n_lags=10,
     n_forecasts=len(df_test),
+    quantiles=[0.1, 0.9],
 )
 
 np_model.add_country_holidays(country_name="KR")
 np_model.fit(df=df_train, freq="D")
 
-np_forecast = np_model.predict(
-    np_model.make_future_dataframe(
-        df=df_prophet,
-        n_historic_predictions=True,
-    )
+np_dataframe = np_model.make_future_dataframe(
+    df=df_prophet,
+    n_historic_predictions=True,
 )
+
+np_forecast = np_model.predict(df=np_dataframe)
+np_forecast_test = np_forecast[train_size:].copy().dropna()
+
+np_series_actual = df_test["y"].reset_index(drop=True)
+np_series_pred = np_forecast_test["yhat1"].reset_index(drop=True)
+
+np_mae = mean_absolute_error(np_series_actual, np_series_pred)
+np_rmse = np.sqrt(mean_squared_error(np_series_actual, np_series_pred))
+np_mape = np.mean(np.abs((np_series_actual - np_series_pred) / np_series_actual)) * 100
+np_smape = smape(np_series_actual, np_series_pred)
+np_crps = np.mean(
+    [
+        crps_from_quantiles(
+            y_true=float(np_series_actual.iloc[i]),
+            pred_quantiles=np.array(
+                [
+                    np_forecast_test["yhat1 0.1"].iloc[i],
+                    np_forecast_test["yhat1 0.9"].iloc[i],
+                ]
+            ),
+            quantile_levels=np.array([0.1, 0.9]),
+        )
+        for i in range(len(np_series_actual))
+    ]
+)
+
+print("\nNeuralProphet Results (Log Scale):")
+print(f"MAE: {p_mae:.4f}")
+print(f"RMSE: {p_rmse:.4f}")
+print(f"MAPE: {p_mape:.2f}%")
+print(f"sMAPE: {p_smape:.2f}%")
+print(f"CRPS: {np_crps:.4f}")
 
 np_model.plot(np_forecast)
