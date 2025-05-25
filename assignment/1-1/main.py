@@ -1,151 +1,271 @@
 # %%
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from preprocessing import TimeSeriesPreprocessor, create_sample_data
+from neuralprophet import NeuralProphet
+from prophet import Prophet
+from sklearn.metrics import mean_absolute_error, mean_squared_error
 
+# %% 1-1 Setup
+date_column = "date"
+value_column = "rental"
 
-# %%
-def main():
-    """Main execution function"""
-    print("=" * 60)
-    print("🔍 Time Series Data Preprocessing Pipeline")
-    print("=" * 60)
+df = pd.read_csv("data_raw.csv")
+df[date_column] = pd.to_datetime(df[date_column])
+df = df.sort_values(date_column).reset_index(drop=True)
 
-    # Generate sample data
-    print("📊 Generating sample data...")
-    df = create_sample_data()
-
-    print(f"✅ Data generated successfully!")
-    print(f"   Shape: {df.shape}")
-    print(f"   Date range: {df['date'].min()} to {df['date'].max()}")
-    print(
-        f"   Missing values: {df['value'].isnull().sum()}/{len(df)} ({(df['value'].isnull().sum() / len(df) * 100):.1f}%)"
-    )
-
-    return df
-
-
-# %%
-# Load the data
-df = main()
-df.head()
-
-# %%
-# Initialize preprocessor with plotting enabled
-preprocessor = TimeSeriesPreprocessor(show_plots=True)
-print("🔧 Preprocessor initialized with plotting enabled")
-
-# %%
-# Execute the complete preprocessing pipeline
-print("🚀 Starting preprocessing pipeline...")
-processed_data, preprocessing_info = preprocessor.preprocess(
-    data=df, date_col="date", value_col="value", freq="D"
+date_range = pd.date_range(
+    start=df[date_column].min(),
+    end=df[date_column].max(),
+    freq="D",
 )
 
-# %%
-# Display comprehensive results
-print("=" * 60)
-print("📈 PREPROCESSING RESULTS SUMMARY")
-print("=" * 60)
-
-print(f"📊 Data Information:")
-print(f"   Original length: {preprocessing_info['original_length']}")
-print(f"   Final length: {len(processed_data)}")
-print(f"   Missing values handled: {preprocessing_info['missing_count']}")
-
-print(f"\n🔧 Applied Methods:")
-print(f"   Missing value method: {preprocessing_info['missing_method']}")
-print(
-    f"   Log transformation: {'✅ Applied' if preprocessing_info['log_applied'] else '❌ Not applied'}"
-)
-print(
-    f"   Seasonality removal: {'✅ Applied' if preprocessing_info['seasonal_removed'] else '❌ Not applied'}"
+df_filled = pd.DataFrame({date_column: date_range}).merge(
+    df, on=date_column, how="left"
 )
 
-# %%
-# Detailed stationarity results
-stationarity = preprocessing_info["stationarity"]
-print(f"📈 Stationarity Test Results:")
-print(f"   ADF statistic: {stationarity['adf_statistic']:.4f}")
-print(f"   p-value: {stationarity['p_value']:.4f}")
-print(f"   Critical values: {stationarity['critical_values']}")
-print(
-    f"   Is stationary: {'✅ Yes' if stationarity['is_stationary'] else '❌ No (consider differencing)'}"
-)
+df_filled[value_column] = df_filled[value_column].interpolate()
+df_filled.to_csv("data_filled.csv", index=False)
 
-# %%
-# Final data statistics
-print(f"📊 Final Processed Data Statistics:")
-print(f"   Mean: {processed_data.mean():.4f}")
-print(f"   Standard Deviation: {processed_data.std():.4f}")
-print(f"   Minimum: {processed_data.min():.4f}")
-print(f"   Maximum: {processed_data.max():.4f}")
-print(f"   Skewness: {processed_data.skew():.4f}")
-print(f"   Kurtosis: {processed_data.kurtosis():.4f}")
+plt.figure(figsize=(12, 6))
+plt.plot(df_filled[date_column], df_filled[value_column], linewidth=1)
+plt.title("Rental Data Over Time")
+plt.xlabel("Date")
+plt.ylabel("Rental")
+plt.xticks(rotation=45)
+plt.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.show()
 
-# %%
-# Save results to files
-output_df = processed_data.to_frame("processed_value")
-output_df.to_csv("processed_timeseries.csv")
+df_filled[f"{value_column}_log"] = np.log(df_filled[value_column])
 
-info_df = pd.DataFrame([preprocessing_info])
-info_df.to_csv("preprocessing_info.csv", index=False)
+plt.figure(figsize=(12, 6))
+plt.plot(df_filled[date_column], df_filled[f"{value_column}_log"], linewidth=1)
+plt.title("Log-transformed Rental Data Over Time")
+plt.xlabel("Date")
+plt.ylabel("Log(Rental)")
+plt.xticks(rotation=45)
+plt.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.show()
 
-print("💾 Files saved:")
-print("   ✅ processed_timeseries.csv")
-print("   ✅ preprocessing_info.csv")
+df_prophet = df_filled[[date_column, f"{value_column}_log"]].copy()
+df_prophet.columns = ["ds", "y"]
 
-# %%
-# Display first and last few values of processed data
-print("🔍 Processed Data Preview:")
-print("First 10 values:")
-print(processed_data.head(10))
-print("\nLast 10 values:")
-print(processed_data.tail(10))
+train_size = int(len(df_prophet) * 0.85)
 
+df_train = df_prophet[:train_size]
+df_test = df_prophet[train_size:]
 
-# %%
-# Additional analysis functions
-def perform_adf_test(series):
-    """Perform ADF test on time series"""
-    from statsmodels.tsa.stattools import adfuller
+# %% 1-2 Prophet
+p_model = Prophet()
+p_model.add_country_holidays(country_name="KR")
+p_model.fit(df_train)
 
-    result = adfuller(series.dropna())
-    print("=" * 40)
-    print("ADF Test Results:")
-    print("=" * 40)
-    print("ADF Statistic: %.6f" % result[0])
-    print("p-value: %.6f" % result[1])
-    print("Critical Values:")
-    for key, value in result[4].items():
-        print(f"\t{key}: {value:.3f}")
+p_forecast = p_model.predict(p_model.make_future_dataframe(periods=len(df_test)))
+p_forecast_test = p_forecast[train_size:]
 
-    if result[1] <= 0.05:
-        print("✅ Reject null hypothesis - Data is stationary")
-    else:
-        print("❌ Fail to reject null hypothesis - Data is non-stationary")
+p_series_actual = df_test["y"].reset_index(drop=True)
+p_series_pred = p_forecast_test["yhat"].reset_index(drop=True)
 
+p_mae = mean_absolute_error(p_series_actual, p_series_pred)
+p_rmse = np.sqrt(mean_squared_error(p_series_actual, p_series_pred))
+p_mape = np.mean(np.abs((p_series_actual - p_series_pred) / p_series_actual)) * 100
 
-# %%
-# Run additional ADF test on final data
-perform_adf_test(processed_data)
-
-# %%
-# Quick visualization of final result
-import matplotlib.pyplot as plt
+print("\nOut-of-time Test Results (Log Scale):")
+print(f"MAE: {p_mae:.4f}")
+print(f"RMSE: {p_rmse:.4f}")
+print(f"MAPE: {p_mape:.2f}%")
 
 plt.figure(figsize=(15, 8))
-plt.subplot(2, 1, 1)
-df.set_index("date")["value"].plot(title="Original Data", alpha=0.7)
+plt.plot(df_train["ds"], df_train["y"], label="Train Data", color="blue")
+plt.plot(df_test["ds"], df_test["y"], label="Test Data", color="green")
+plt.plot(df_test["ds"], p_series_pred, label="Predictions", color="red", linestyle="--")
+plt.title("Prophet Model - Log-transformed Rental Data Forecast")
+plt.xlabel("Date")
+plt.ylabel("Log(Rental)")
+plt.legend()
+plt.xticks(rotation=45)
+plt.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.show()
+
+p_model.plot(p_forecast)
+plt.title("Prophet Model Forecast - Full Timeline")
+plt.show()
+
+p_model.plot_components(p_forecast)
+plt.show()
+
+# %% 1-3 Prophet Changepoints
+p_cp_scales = [0.01, 0.1, 0.5]
+p_cp_results = []
+p_cp_models = {}
+p_cp_forecasts = {}
+
+for scale in p_cp_scales:
+    print(f"\nTraining Prophet model with changepoint_prior_scale={scale}")
+
+    p_model = Prophet(changepoint_prior_scale=scale)
+    p_model.add_country_holidays(country_name="KR")
+    p_model.fit(df_train)
+
+    p_forecast = p_model.predict(p_model.make_future_dataframe(periods=len(df_test)))
+    p_forecast_test = p_forecast[train_size:]
+
+    p_series_pred = p_forecast_test["yhat"].reset_index(drop=True)
+
+    p_mae = mean_absolute_error(p_series_actual, p_series_pred)
+    p_mape = np.mean(np.abs((p_series_actual - p_series_pred) / p_series_actual)) * 100
+
+    p_cp_results.append(
+        {
+            "changepoint_prior_scale": scale,
+            "MAE": p_mae,
+            "MAPE": p_mape,
+        }
+    )
+
+    p_cp_models[scale] = p_model
+    p_cp_forecasts[scale] = p_forecast
+
+df_cp_results = pd.DataFrame(p_cp_results)
+
+print("\nChangepoint Prior Scale Comparison")
+print(df_cp_results.to_string(index=False))
+
+plt.figure(figsize=(15, 10))
+
+for i, scale in enumerate(p_cp_scales):
+    plt.subplot(2, 2, i + 1)
+
+    p_forecast_test = p_cp_forecasts[scale][train_size:]
+    p_series_pred = p_forecast_test["yhat"].reset_index(drop=True)
+
+    plt.plot(df_train["ds"], df_train["y"], label="Train Data", color="blue", alpha=0.7)
+    plt.plot(df_test["ds"], df_test["y"], label="Test Data", color="green", alpha=0.8)
+    plt.plot(
+        df_test["ds"],
+        p_series_pred,
+        label="Predictions",
+        color="red",
+        linestyle="--",
+        linewidth=2,
+    )
+
+    p_mae_current = df_cp_results[df_cp_results["changepoint_prior_scale"] == scale][
+        "MAE"
+    ].iloc[0]
+
+    p_mape_current = df_cp_results[df_cp_results["changepoint_prior_scale"] == scale][
+        "MAPE"
+    ].iloc[0]
+
+    plt.title(
+        f"Changepoint Scale: {scale}\nMAE: {p_mae_current:.4f}, MAPE: {p_mape_current:.2f}%"
+    )
+    plt.xlabel("Date")
+    plt.ylabel("Log(Rental)")
+    plt.legend(fontsize=8)
+    plt.xticks(rotation=45)
+    plt.grid(True, alpha=0.3)
+
+plt.subplot(2, 2, 4)
+plt.bar(
+    df_cp_results["changepoint_prior_scale"].astype(str),
+    df_cp_results["MAPE"],
+    color=["skyblue", "lightcoral", "lightgreen"],
+    alpha=0.7,
+)
+plt.title("MAPE Comparison by Changepoint Prior Scale")
+plt.xlabel("Changepoint Prior Scale")
+plt.ylabel("MAPE (%)")
 plt.grid(True, alpha=0.3)
 
-plt.subplot(2, 1, 2)
-processed_data.plot(title="Preprocessed Data", color="red")
-plt.grid(True, alpha=0.3)
+for i, (idx, row) in enumerate(df_cp_results.iterrows()):
+    plt.text(
+        i,
+        row["MAPE"] + 0.1,
+        f"{row['MAPE']:.2f}%",
+        ha="center",
+        va="bottom",
+        fontweight="bold",
+    )
 
 plt.tight_layout()
 plt.show()
 
-print("✅ Preprocessing pipeline completed successfully!")
+plt.figure(figsize=(15, 12))
 
-# %%
+for i, scale in enumerate(p_cp_scales):
+    plt.subplot(3, 1, i + 1)
+
+    p_model = p_cp_models[scale]
+    p_forecast = p_cp_forecasts[scale]
+
+    plt.plot(
+        df_prophet["ds"], df_prophet["y"], label="Actual Data", color="black", alpha=0.6
+    )
+    plt.plot(
+        p_forecast["ds"],
+        p_forecast["yhat"],
+        label="Forecast",
+        color="blue",
+        linewidth=2,
+    )
+    plt.fill_between(
+        p_forecast["ds"],
+        p_forecast["yhat_lower"],
+        p_forecast["yhat_upper"],
+        alpha=0.3,
+        color="blue",
+        label="Confidence Interval",
+    )
+
+    p_changepoints = p_model.changepoints
+    p_changepoint_effects = np.array(p_model.params["delta"].mean(axis=0))
+    p_significant_changepoints = p_changepoints[np.abs(p_changepoint_effects) > 0.01]
+
+    if len(p_significant_changepoints) > 0:
+        for cp in p_significant_changepoints:
+            plt.axvline(
+                x=pd.to_datetime(cp),
+                color="red",
+                linestyle=":",
+                alpha=0.8,
+                linewidth=1.5,
+            )
+
+    plt.title(
+        f"Prophet Forecast with Changepoints (Scale: {scale})\n"
+        f"Detected Changepoints: {len(p_significant_changepoints)}"
+    )
+    plt.xlabel("Date")
+    plt.ylabel("Log(Rental)")
+    plt.legend()
+    plt.xticks(rotation=45)
+    plt.grid(True, alpha=0.3)
+
+plt.tight_layout()
+plt.show()
+
+# %% 1-4 NeuralProphet
+np_model = NeuralProphet(
+    yearly_seasonality=True,
+    weekly_seasonality=True,
+    daily_seasonality=False,
+    n_lags=10,
+    n_forecasts=len(df_test),
+)
+
+np_model.add_country_holidays(country_name="KR")
+np_model.fit(df=df_train, freq="D")
+
+np_forecast = np_model.predict(
+    np_model.make_future_dataframe(
+        df=df_prophet,
+        n_historic_predictions=True,
+    )
+)
+
+np_model.plot(np_forecast)

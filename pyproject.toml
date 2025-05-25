@@ -6,6 +6,7 @@ dependencies = [
     "arch>=7.2.0",
     "ipykernel>=6.29.5",
     "matplotlib>=3.10.3",
+    "nbformat>=5.10.4",
     "neuralprophet>=0.9.0",
     "numpy>=1.26.4",
     "oecddatabuilder>=0.1.2",
