@@ -11,6 +11,7 @@ dependencies = [
     "numpy>=1.26.4",
     "oecddatabuilder>=0.1.2",
     "pandas>=2.2.3",
+    "pandas-datareader>=0.10.0",
     "plotly>=6.1.1",
     "pmdarima>=2.0.4",
     "prophet>=1.1.6",
