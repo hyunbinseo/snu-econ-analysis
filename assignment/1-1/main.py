@@ -2,6 +2,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from modules import get_historical_precipitation
 from neuralprophet import NeuralProphet
 from prophet import Prophet
 from skforecast.metrics import crps_from_quantiles
@@ -125,6 +126,57 @@ plt.show()
 
 p_model.plot_components(p_forecast)
 plt.show()
+
+# %% 5. Future Regressors 분석
+# https://facebook.github.io/prophet/docs/seasonality,_holiday_effects,_and_regressors.html
+
+df_train2 = pd.merge(
+    df_train,
+    get_historical_precipitation(
+        37.5665,
+        126.9780,
+        df_train["ds"].min().strftime("%Y-%m-%d"),
+        df_train["ds"].max().strftime("%Y-%m-%d"),
+    ),
+    on="ds",
+    how="left",
+)
+
+df_train2["precipitation"] = df_train2["precipitation"].fillna(0)
+
+p2_model = Prophet(interval_width=0.8)
+p2_model.add_country_holidays(country_name="KR")
+p2_model.add_regressor("precipitation")
+p2_model.fit(df_train2)
+
+p2_dataframe = p2_model.make_future_dataframe(periods=len(df_test))
+p2_dataframe = pd.merge(
+    p2_dataframe,
+    get_historical_precipitation(
+        37.5665,
+        126.9780,
+        p2_dataframe["ds"].min().strftime("%Y-%m-%d"),
+        p2_dataframe["ds"].max().strftime("%Y-%m-%d"),
+    ),
+    on="ds",
+    how="left",
+)
+
+p2_forecast = p2_model.predict(p2_dataframe)
+p2_forecast_test = p2_forecast[train_size:].copy()
+
+p2_series_actual = df_test["y"].reset_index(drop=True)
+p2_series_pred = p2_forecast_test["yhat"].reset_index(drop=True)
+
+p2_mape = np.mean(np.abs((p2_series_actual - p2_series_pred) / p2_series_actual)) * 100
+
+print("\nProphet Results with Precipitation (Log Scale):")
+print(f"MAPE: {p2_mape:.2f}%")
+
+p2_model.plot(p2_forecast)
+plt.title("Prophet Model Forecast with Precipitation - Full Timeline")
+plt.show()
+
 
 # %% 3. Change Point 민감도 분석
 p_cp_scales = [0.01, 0.1, 0.5]
